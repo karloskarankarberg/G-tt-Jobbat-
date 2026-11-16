@@ -1,0 +1,6 @@
+{
+  "name": "TidKonto — Tidrapportering & Projektredovisning",
+  "description": "Smidig tidrapportering för företag med kund- och projekthantering, timpriskalkyl, mobil snabbrapportering samt export till Excel och PDF.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

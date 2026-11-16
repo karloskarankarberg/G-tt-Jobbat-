@@ -1,0 +1,372 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidCustomer(data) {
+      return data.keys().hasAll([
+          'ownerId', 'name', 'orgNumber', 'contactEmail',
+          'notes', 'archived', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'name', 'orgNumber', 'contactEmail',
+          'notes', 'archived', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && data.orgNumber is string && data.orgNumber.size() <= 30
+        && data.contactEmail is string && data.contactEmail.size() <= 120
+        && data.notes is string && data.notes.size() <= 500
+        && data.archived is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRateHistoryItem(item, allowNullRate) {
+      return item is map
+        && item.keys().hasAll(['hourlyRate', 'effectiveFrom'])
+        && item.keys().hasOnly(['hourlyRate', 'effectiveFrom'])
+        && (
+          (allowNullRate && item.hourlyRate == null)
+          || (item.hourlyRate is number && item.hourlyRate >= 0 && item.hourlyRate <= 100000)
+        )
+        && item.effectiveFrom is string
+        && item.effectiveFrom.size() == 10
+        && item.effectiveFrom.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    function isValidRateHistory(history, allowNullRate) {
+      return history is list
+        && history.size() <= 50
+        && (history.size() == 0 || isValidRateHistoryItem(history[0], allowNullRate));
+    }
+
+    function isValidProject(data) {
+      return data.keys().hasAll([
+          'ownerId', 'customerId', 'name', 'hourlyRate', 'rateHistory',
+          'status', 'color', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'customerId', 'name', 'hourlyRate', 'rateHistory',
+          'status', 'color', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && isValidId(data.customerId)
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 120
+        && data.hourlyRate is number && data.hourlyRate >= 0 && data.hourlyRate <= 100000
+        && isValidRateHistory(data.rateHistory, false)
+        && data.status is string && data.status in ['active', 'archived']
+        && data.color is string && data.color.size() >= 4 && data.color.size() <= 20
+        && data.notes is string && data.notes.size() <= 500
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTaskType(data) {
+      return data.keys().hasAll([
+          'ownerId', 'projectId', 'name',
+          'hourlyRate', 'rateHistory', 'archived', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'projectId', 'name',
+          'hourlyRate', 'rateHistory', 'archived', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && data.projectId is string && data.projectId.size() <= 128
+        && (data.projectId == '' || isValidId(data.projectId))
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 100
+        && (data.hourlyRate == null || (data.hourlyRate is number && data.hourlyRate >= 0 && data.hourlyRate <= 100000))
+        && isValidRateHistory(data.rateHistory, true)
+        && data.archived is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTimeEntry(data) {
+      return data.keys().hasAll([
+          'ownerId', 'customerId', 'projectId', 'taskTypeId', 'taskName',
+          'date', 'startTime', 'endTime', 'hours', 'hourlyRate',
+          'billable', 'invoiced', 'invoicedDate', 'description', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'customerId', 'projectId', 'taskTypeId', 'taskName',
+          'date', 'startTime', 'endTime', 'hours', 'hourlyRate',
+          'billable', 'invoiced', 'invoicedDate', 'description', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && isValidId(data.customerId)
+        && isValidId(data.projectId)
+        && data.taskTypeId is string && data.taskTypeId.size() <= 128
+        && (data.taskTypeId == '' || isValidId(data.taskTypeId))
+        && data.taskName is string && data.taskName.size() >= 1 && data.taskName.size() <= 100
+        && data.date is string && data.date.size() == 10 && data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && data.startTime is string && data.startTime.size() <= 5
+        && (data.startTime == '' || data.startTime.matches('^[0-9]{2}:[0-9]{2}$'))
+        && data.endTime is string && data.endTime.size() <= 5
+        && (data.endTime == '' || data.endTime.matches('^[0-9]{2}:[0-9]{2}$'))
+        && data.hours is number && data.hours >= 0.25 && data.hours <= 24
+        && data.hourlyRate is number && data.hourlyRate >= 0 && data.hourlyRate <= 100000
+        && data.billable is bool
+        && data.invoiced is bool
+        && data.invoicedDate is string && data.invoicedDate.size() <= 10
+        && (data.invoicedDate == '' || data.invoicedDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$'))
+        && (!data.invoiced || data.invoicedDate != '')
+        && data.description is string && data.description.size() <= 500
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidActiveTimer(data) {
+      return data.keys().hasAll([
+          'ownerId', 'customerId', 'projectId', 'taskTypeId',
+          'description', 'startedAtMs', 'accumulatedMs', 'isRunning', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'customerId', 'projectId', 'taskTypeId',
+          'description', 'startedAtMs', 'accumulatedMs', 'isRunning', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && data.ownerId == request.auth.uid
+        && isValidId(data.customerId)
+        && isValidId(data.projectId)
+        && data.taskTypeId is string && data.taskTypeId.size() <= 128
+        && (data.taskTypeId == '' || isValidId(data.taskTypeId))
+        && data.description is string && data.description.size() <= 500
+        && data.startedAtMs is number && data.startedAtMs >= 0
+        && data.accumulatedMs is number && data.accumulatedMs >= 0
+        && data.isRunning is bool
+        && data.updatedAt is timestamp;
+    }
+
+    match /customers/{customerId} {
+      allow get: if isSignedIn() && isValidId(customerId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(customerId)
+        && isValidCustomer(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(customerId)
+        && isValidCustomer(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action: UpdateDetails (allowed only when active)
+          (existing().archived == false && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'orgNumber', 'contactEmail', 'notes', 'updatedAt'])) ||
+          // Action: ArchiveOrRestore
+          (incoming().diff(existing()).affectedKeys().hasOnly(['archived', 'updatedAt']))
+        );
+      allow delete: if isVerifiedUser() && isValidId(customerId) && existing().ownerId == request.auth.uid;
+    }
+
+    match /projects/{projectId} {
+      allow get: if isSignedIn() && isValidId(projectId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(projectId)
+        && isValidProject(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/customers/$(incoming().customerId))
+        && get(/databases/$(database)/documents/customers/$(incoming().customerId)).data.ownerId == request.auth.uid;
+      allow update: if isVerifiedUser()
+        && isValidId(projectId)
+        && isValidProject(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/customers/$(incoming().customerId))
+        && get(/databases/$(database)/documents/customers/$(incoming().customerId)).data.ownerId == request.auth.uid
+        && (
+          // Action: UpdateDetails (only when active)
+          (existing().status == 'active' && incoming().diff(existing()).affectedKeys().hasOnly(['customerId', 'name', 'hourlyRate', 'rateHistory', 'color', 'notes', 'updatedAt'])) ||
+          // Action: ToggleStatus (archive or restore; backfills defaults if legacy document)
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'hourlyRate', 'rateHistory', 'updatedAt'])
+            && (!('hourlyRate' in existing()) || incoming().hourlyRate == existing().hourlyRate)
+            && (!('rateHistory' in existing()) || incoming().rateHistory == existing().rateHistory)
+          )
+        );
+      allow delete: if isVerifiedUser() && isValidId(projectId) && existing().ownerId == request.auth.uid;
+    }
+
+    match /taskTypes/{taskTypeId} {
+      allow get: if isSignedIn() && isValidId(taskTypeId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(taskTypeId)
+        && isValidTaskType(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (
+          incoming().projectId == ''
+          || (
+            exists(/databases/$(database)/documents/projects/$(incoming().projectId))
+            && get(/databases/$(database)/documents/projects/$(incoming().projectId)).data.ownerId == request.auth.uid
+          )
+        );
+      allow update: if isVerifiedUser()
+        && isValidId(taskTypeId)
+        && isValidTaskType(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().projectId == ''
+          || (
+            exists(/databases/$(database)/documents/projects/$(incoming().projectId))
+            && get(/databases/$(database)/documents/projects/$(incoming().projectId)).data.ownerId == request.auth.uid
+          )
+        )
+        && (
+          // Action: UpdateTaskType
+          (existing().archived == false && incoming().diff(existing()).affectedKeys().hasOnly(['projectId', 'name', 'hourlyRate', 'rateHistory', 'updatedAt'])) ||
+          // Action: ArchiveOrRestore (backfills rateHistory if legacy document)
+          (
+            incoming().diff(existing()).affectedKeys().hasOnly(['archived', 'rateHistory', 'updatedAt'])
+            && (!('rateHistory' in existing()) || incoming().rateHistory == existing().rateHistory)
+          )
+        );
+      allow delete: if isVerifiedUser() && isValidId(taskTypeId) && existing().ownerId == request.auth.uid;
+    }
+
+    match /timeEntries/{entryId} {
+      allow get: if isSignedIn() && isValidId(entryId) && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(entryId)
+        && isValidTimeEntry(incoming())
+        && incoming().invoiced == false
+        && incoming().invoicedDate == ''
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/customers/$(incoming().customerId))
+        && get(/databases/$(database)/documents/customers/$(incoming().customerId)).data.ownerId == request.auth.uid
+        && exists(/databases/$(database)/documents/projects/$(incoming().projectId))
+        && get(/databases/$(database)/documents/projects/$(incoming().projectId)).data.ownerId == request.auth.uid
+        && get(/databases/$(database)/documents/projects/$(incoming().projectId)).data.customerId == incoming().customerId
+        && (
+          incoming().taskTypeId == ''
+          || (
+            exists(/databases/$(database)/documents/taskTypes/$(incoming().taskTypeId))
+            && get(/databases/$(database)/documents/taskTypes/$(incoming().taskTypeId)).data.ownerId == request.auth.uid
+            && (
+              get(/databases/$(database)/documents/taskTypes/$(incoming().taskTypeId)).data.projectId == ''
+              || get(/databases/$(database)/documents/taskTypes/$(incoming().taskTypeId)).data.projectId == incoming().projectId
+            )
+          )
+        );
+      // Terminal state locking: once invoiced == true, edits and deletes are blocked unless explicitly un-invoiced
+      allow update: if isVerifiedUser()
+        && isValidId(entryId)
+        && isValidTimeEntry(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/customers/$(incoming().customerId))
+        && get(/databases/$(database)/documents/customers/$(incoming().customerId)).data.ownerId == request.auth.uid
+        && exists(/databases/$(database)/documents/projects/$(incoming().projectId))
+        && get(/databases/$(database)/documents/projects/$(incoming().projectId)).data.ownerId == request.auth.uid
+        && get(/databases/$(database)/documents/projects/$(incoming().projectId)).data.customerId == incoming().customerId
+        && (
+          incoming().taskTypeId == ''
+          || (
+            exists(/databases/$(database)/documents/taskTypes/$(incoming().taskTypeId))
+            && get(/databases/$(database)/documents/taskTypes/$(incoming().taskTypeId)).data.ownerId == request.auth.uid
+            && (
+              get(/databases/$(database)/documents/taskTypes/$(incoming().taskTypeId)).data.projectId == ''
+              || get(/databases/$(database)/documents/taskTypes/$(incoming().taskTypeId)).data.projectId == incoming().projectId
+            )
+          )
+        )
+        && (
+          // Action: EditEntry (only while unbilled)
+          (existing().invoiced == false && incoming().invoiced == false && incoming().diff(existing()).affectedKeys().hasOnly([
+            'customerId', 'projectId', 'taskTypeId', 'taskName',
+            'date', 'startTime', 'endTime', 'hours', 'hourlyRate',
+            'billable', 'description', 'updatedAt'
+          ])) ||
+          // Action: MarkAsInvoiced (locks the entry)
+          (existing().invoiced == false && incoming().invoiced == true && incoming().diff(existing()).affectedKeys().hasOnly([
+            'invoiced', 'invoicedDate', 'updatedAt'
+          ])) ||
+          // Action: UndoInvoiced (avfakturering — unlocks the entry)
+          (existing().invoiced == true && incoming().invoiced == false && incoming().invoicedDate == '' && incoming().diff(existing()).affectedKeys().hasOnly([
+            'invoiced', 'invoicedDate', 'updatedAt'
+          ]))
+        );
+      allow delete: if isVerifiedUser()
+        && isValidId(entryId)
+        && existing().ownerId == request.auth.uid
+        && existing().invoiced == false;
+    }
+
+    match /activeTimers/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && userId == request.auth.uid && (resource == null || existing().ownerId == request.auth.uid);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && userId == request.auth.uid
+        && isValidActiveTimer(incoming())
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/customers/$(incoming().customerId))
+        && get(/databases/$(database)/documents/customers/$(incoming().customerId)).data.ownerId == request.auth.uid
+        && exists(/databases/$(database)/documents/projects/$(incoming().projectId))
+        && get(/databases/$(database)/documents/projects/$(incoming().projectId)).data.ownerId == request.auth.uid
+        && get(/databases/$(database)/documents/projects/$(incoming().projectId)).data.customerId == incoming().customerId;
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && userId == request.auth.uid
+        && isValidActiveTimer(incoming())
+        && existing().ownerId == request.auth.uid
+        && incoming().ownerId == existing().ownerId
+        && incoming().updatedAt == request.time
+        && exists(/databases/$(database)/documents/customers/$(incoming().customerId))
+        && get(/databases/$(database)/documents/customers/$(incoming().customerId)).data.ownerId == request.auth.uid
+        && exists(/databases/$(database)/documents/projects/$(incoming().projectId))
+        && get(/databases/$(database)/documents/projects/$(incoming().projectId)).data.ownerId == request.auth.uid
+        && get(/databases/$(database)/documents/projects/$(incoming().projectId)).data.customerId == incoming().customerId
+        && (
+          // Action: PauseResumeOrSwitch
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'customerId', 'projectId', 'taskTypeId', 'description',
+            'startedAtMs', 'accumulatedMs', 'isRunning', 'updatedAt'
+          ])
+        );
+      allow delete: if isVerifiedUser() && isValidId(userId) && userId == request.auth.uid && existing().ownerId == request.auth.uid;
+    }
+  }
+}

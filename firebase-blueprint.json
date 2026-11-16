@@ -1,0 +1,391 @@
+{
+  "entities": {
+    "Customer": {
+      "title": "Customer",
+      "description": "A client/customer in the user's business.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the business owner."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Customer display name."
+        },
+        "orgNumber": {
+          "type": "string",
+          "maxLength": 30,
+          "description": "Swedish organization number or VAT ID."
+        },
+        "contactEmail": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Primary billing contact email."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Internal notes about the customer."
+        },
+        "archived": {
+          "type": "boolean",
+          "description": "Whether the customer is archived."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": [
+        "ownerId",
+        "name",
+        "orgNumber",
+        "contactEmail",
+        "notes",
+        "archived",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "A project linked to a customer with a mandatory hourly rate and dated rate history.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "customerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Referenced Customer document ID."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Project title."
+        },
+        "hourlyRate": {
+          "type": "number",
+          "description": "Mandatory default hourly rate in SEK for this project."
+        },
+        "rateHistory": {
+          "type": "array",
+          "description": "Dated hourly rate periods ({ hourlyRate, effectiveFrom }) ordered chronologically."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "archived"],
+          "description": "Current project status."
+        },
+        "color": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 20,
+          "description": "Hex accent color used for visual distinction."
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Project scope or notes."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "ownerId",
+        "customerId",
+        "name",
+        "hourlyRate",
+        "rateHistory",
+        "status",
+        "color",
+        "notes",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "TaskType": {
+      "title": "TaskType",
+      "description": "Work task category (firm-wide or scoped to a project) with an optional hourly rate override.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "projectId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Optional Project document ID, or empty string for all projects."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Task category name."
+        },
+        "hourlyRate": {
+          "type": "number",
+          "description": "Optional hourly rate override in SEK, or null to inherit the project hourly rate."
+        },
+        "rateHistory": {
+          "type": "array",
+          "description": "Dated hourly rate override periods ({ hourlyRate, effectiveFrom }) ordered chronologically."
+        },
+        "archived": {
+          "type": "boolean",
+          "description": "Whether the task type is archived."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "ownerId",
+        "projectId",
+        "name",
+        "hourlyRate",
+        "rateHistory",
+        "archived",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "TimeEntry": {
+      "title": "TimeEntry",
+      "description": "A logged work session tied to a customer, project, and task type. Immutable once invoiced.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "customerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Referenced Customer document ID."
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Referenced Project document ID."
+        },
+        "taskTypeId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Referenced TaskType document ID or empty string."
+        },
+        "taskName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Task name snapshot at time of logging."
+        },
+        "date": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "ISO date YYYY-MM-DD."
+        },
+        "startTime": {
+          "type": "string",
+          "maxLength": 5,
+          "description": "Optional HH:MM start time."
+        },
+        "endTime": {
+          "type": "string",
+          "maxLength": 5,
+          "description": "Optional HH:MM end time."
+        },
+        "hours": {
+          "type": "number",
+          "description": "Decimal hours worked (0 < hours <= 24)."
+        },
+        "hourlyRate": {
+          "type": "number",
+          "description": "Locked hourly rate in SEK at time of logging/invoicing."
+        },
+        "billable": {
+          "type": "boolean",
+          "description": "Whether the entry is billable."
+        },
+        "invoiced": {
+          "type": "boolean",
+          "description": "Whether the entry has been marked as invoiced (locks record from further edits)."
+        },
+        "invoicedDate": {
+          "type": "string",
+          "maxLength": 10,
+          "description": "ISO date YYYY-MM-DD when marked as invoiced, or empty string."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Work description."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "ownerId",
+        "customerId",
+        "projectId",
+        "taskTypeId",
+        "taskName",
+        "date",
+        "startTime",
+        "endTime",
+        "hours",
+        "hourlyRate",
+        "billable",
+        "invoiced",
+        "invoicedDate",
+        "description",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ActiveTimer": {
+      "title": "ActiveTimer",
+      "description": "Currently running or paused mobile stopwatch state persisted in Firestore.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the owner."
+        },
+        "customerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Referenced Customer document ID."
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Referenced Project document ID."
+        },
+        "taskTypeId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Optional TaskType document ID."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Work note for the timer."
+        },
+        "startedAtMs": {
+          "type": "number",
+          "description": "Epoch milliseconds when current running segment started."
+        },
+        "accumulatedMs": {
+          "type": "number",
+          "description": "Accumulated milliseconds from paused segments."
+        },
+        "isRunning": {
+          "type": "boolean",
+          "description": "Whether the timer is currently ticking."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "ownerId",
+        "customerId",
+        "projectId",
+        "taskTypeId",
+        "description",
+        "startedAtMs",
+        "accumulatedMs",
+        "isRunning",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "Customers owned by the authenticated user."
+    },
+    "/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "Projects belonging to a customer and owned by the user."
+    },
+    "/taskTypes/{taskTypeId}": {
+      "schema": { "$ref": "#/entities/TaskType" },
+      "description": "Work task types (global or per-project) defining hourly rates."
+    },
+    "/timeEntries/{entryId}": {
+      "schema": { "$ref": "#/entities/TimeEntry" },
+      "description": "Logged work hours owned by the user."
+    },
+    "/activeTimers/{userId}": {
+      "schema": { "$ref": "#/entities/ActiveTimer" },
+      "description": "Single active timer document per authenticated user."
+    }
+  }
+}
